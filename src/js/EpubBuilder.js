@@ -17,6 +17,7 @@ define(["Construct/DublinCore"], function( DublinCore ) {
             }});
             $.ajax({async:false, type:"get", dataType : "text" ,url:"./epub/OPS/toc.ncx", "success":function(data) {
                 _this.toc = data;
+                _this.tocTemplate = data;  // 保存原始模板，导入操作会覆盖 this.toc
             }});
             $.ajax({async:false, type:"get", dataType : "text" ,url:"./epub/OPS/content.opf", "success":function(data) {
                 _this.contentOpt = data;
@@ -418,7 +419,7 @@ define(["Construct/DublinCore"], function( DublinCore ) {
             var compiledContentOpf = Handlebars.compile(this.contentOpt)({ tocItem : tocItem, options : options });
             compiledContentOpf = compiledContentOpf.replace(/(<\/manifest>)/, imageManifestHtml + "\n        $1");
             OPSFolder.file("content.opf", compiledContentOpf);
-            OPSFolder.file("toc.ncx", Handlebars.compile(this.toc)({ title: options.title, author: options.author, tocItem: tocItem }));
+            OPSFolder.file("toc.ncx", Handlebars.compile(this.tocTemplate)({ title: options.title, author: options.author, tocItem: tocItem }));
 
             /*
             options.coverImage = this.base64toImage($("<img>").attr("src",options.coverImage), imagesFolder);
