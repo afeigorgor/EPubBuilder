@@ -7,10 +7,9 @@
         <dc:description xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.description}}</dc:description>
         <dc:language xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.language}}</dc:language>
         <dc:creator opf:role="aut" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">{{options.author}}</dc:creator>
-        <dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">title</dc:title>
         <dc:date xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.date}}</dc:date>
         <dc:contributor opf:role="bkp" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">{{options.contributor}}</dc:contributor>
-        <dc:identifier opf:scheme="ISBN" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">{{options.ISBN}}</dc:identifier>
+        <dc:identifier opf:scheme="UUID" id="uuid_id" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">urn:uuid:{{options.ISBN}}</dc:identifier>
         {{#if options.coverImage}}
             <meta name="cover" content="cover"/>
         {{/if}}
@@ -20,12 +19,18 @@
             <!-- Content Documents -->
             <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml" />
             <item id="css" href="css/main.css" media-type="text/css" />
-            <item id="cover" href="{{options.coverImage}}" media-type="image/*"/>
+            <item id="cover" href="{{options.coverImage}}" media-type="{{options._coverImageMediaType}}"/>
             {{#each tocItem}}
                 <item id="{{href}}" href="Text/{{href}}" media-type="application/xhtml+xml"/>
             {{/each}}
+            {{#if options.coverImage}}
+                <item id="coverpage" href="Text/coverpage.html" media-type="application/xhtml+xml"/>
+            {{/if}}
         </manifest>
         <spine toc="ncx">
+            {{#if options.coverImage}}
+                <itemref idref="coverpage" linear="yes" />
+            {{/if}}
             {{#each tocItem}}
                 <itemref idref="{{href}}" linear="yes" />
             {{/each}}

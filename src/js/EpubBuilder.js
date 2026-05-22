@@ -380,10 +380,13 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                     var coverFilename = coverResult[1][0] || "";
                     imageManifestItems = imageManifestItems.concat(coverResult[1]);
                     var match = imgTag.match(/src=["']([^"']+)["']/);
-                    // base64toImage 已返回正确的 ../images/uuid 格式
-                    // 直接使用，不做路径变换
-                    options.coverImage = match ? match[1] : "";
+                    // base64toImage 返回 ../images/uuid（相对于 Text/coverpage.html）
+                    // 封面 manifest href 需要 images/uuid（相对于 OPS/），故去掉前缀 ../
+                    var coverHref = match ? match[1].replace(/^\.\.\//, "") : "";
+                    options.coverImage = coverHref;
                     options._coverImageName = coverFilename;
+                    var ext = coverFilename.split(".").pop().toLowerCase();
+                    options._coverImageMediaType = ext === "png" ? "image/png" : "image/jpeg";
                 };
             }catch(e) {
                 options.coverImage = "";
