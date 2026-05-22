@@ -143,7 +143,12 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                 var domParser = new DOMParser();
                 var $content = $( domParser.parseFromString(content, 'text/html') );
                 //var $content = $( domParser.parseFromString(content, 'text/xml') ); 如果使用parsexml的方式， 如果标签不合法，会报错;
-                if($content.find("body").size()) { $content = $content.find("body") };
+                // 用 .contents() 取 body/html 的子节点（不含外层标签），避免 <body> 本身被当成子元素塞进 page.html 的 <body> 导致双重 body
+                var $target = $content.find("body");
+                if (!$target.length && $content.find("html").length) {
+                    $target = $content.find("html");
+                }
+                $content = $target.contents();
                 var imgs = $content.find("image").add( $content.find("img") );
                 $.each(imgs, function (i,  img ) {
                     //把处理图片的逻辑添加的延迟对象中;
@@ -214,32 +219,64 @@ define(["Construct/DublinCore"], function( DublinCore ) {
 
         /**
          * @desc 把base64的图片转化为文件流;
-         * @return html;
+         * @param {String} content - HTML内容
+         * @param {JSZip} zipImageFolder - 图片写入目标文件夹
+         * @return {[String, Array]} - [处理后的HTML, 图片文件名数组]
          * */
         "base64toImage" : function ( content, zipImageFolder ) {
+            var _this = this;
             var $html = $(content);
             var wrap = $("<div>").append( $html );
+            var imageFilenames = [];
+            var MAX_W = 800, MAX_H = 800, QUALITY = 0.8;
+
             wrap.find("image").add( wrap.find("img")).each(function(i, e) {
                 var href = $(e).attr("xlink:href") || $(e).attr("src");
                 var dataUrl = href.split(",").pop();
-                /*
-                */
                 var imageType = href.match(/data:image\/([\w\W]+);/i);
-                imageType = imageType&&imageType.pop() || "";
+                imageType = imageType && imageType.pop() || "";
                 if( imageType ) {
-                    var uuid = util.uuid()+"."+imageType;
-                    zipImageFolder.file(  uuid , dataUrl  , {base64: true});
-                    $(e).attr("src", "../images/"+uuid );
-                    //对svg中的image做特殊处理 , 这本书#Rabbit, Run.epub#;
+                    var originalData = href; // full data:image/... URL
+                    var isPng = imageType.toLowerCase().indexOf("png") !== -1;
+                    var outputType = isPng ? "image/png" : "image/jpeg";
+                    var outputExt = isPng ? "png" : "jpg";
+                    var dataUrl = href.split(",").pop();
+
+                    // --- 压缩大图：data URL 直接画 canvas，浏览器同步处理 ---
+                    try {
+                        var img = new Image();
+                        img.src = originalData;
+                        // data URL 在 canvas.drawImage 时浏览器可同步解码（img 已在内存）
+                        var w = img.naturalWidth || img.width;
+                        var h = img.naturalHeight || img.height;
+                        var ratio = 1;
+                        if (w > 0 && h > 0 && (w > MAX_W || h > MAX_H)) {
+                            ratio = Math.min(MAX_W / w, MAX_H / h);
+                            w = Math.round(w * ratio);
+                            h = Math.round(h * ratio);
+                        }
+                        if (w > 0 && h > 0 && ratio < 1) {
+                            var canvas = document.createElement("canvas");
+                            canvas.width = w;
+                            canvas.height = h;
+                            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                            dataUrl = canvas.toDataURL(outputType, QUALITY).split(",").pop();
+                        }
+                    } catch(err) {
+                        console.warn("图片压缩失败，使用原图:", err);
+                    }
+                    var uuid = util.uuid() + "." + outputExt;
+                    zipImageFolder.file(uuid, dataUrl, {base64: true});
+                    imageFilenames.push(uuid);
+                    $(e).attr("src", "../images/" + uuid);
                     if($(e).closest("svg").size()) {
-                        $(e).attr("xlink:href",  "../images/"+uuid);
-                        $(e).attr("src", "" );
-                    };
-                    //百度编辑器会设置一个_src属性和src一样； src如果为base64的话， 文件会很大;
-                    $(e).attr("_src","");
+                        $(e).attr("xlink:href", "../images/" + uuid);
+                        $(e).attr("src", "");
+                    }
+                    $(e).attr("_src", "");
                 };
             });
-            return wrap.html();
+            return [wrap.html(), imageFilenames];
         },
 
         /**
@@ -288,34 +325,45 @@ define(["Construct/DublinCore"], function( DublinCore ) {
             var imagesFolder = OPSFolder.folder("images");
             var textFolder = OPSFolder.folder("Text");
 
+            // ISBN 为空时生成 UUID，避免 dc:identifier 空白
+            if (!options.ISBN || $.trim(options.ISBN) === "") {
+                options.ISBN = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            // 图片 manifest 条目：跟踪 base64toImage 写入的所有图片文件名
+            var imageManifestItems = [];
+
             //循环contentArray和tocArray， 生成html字符串
             var chapterLength = options.contentArray.length;
             var tocItem = [];
             var contentItem = [];
 
-            try{
-                for(var i=0; i< chapterLength; i++) {
-                    //生成章节数据
-                    tocItem.push({
-                        name : options.tocArray[i],
-                        href : "chapter" + i + ".html",
-                        //如果页面的标题叫做封面，那么EB就认为， 这个是封面， 不把页面生成到toc.ncx中，但是生成到content.opf当中;
-                        isCoverPage : $.trim(options.tocArray[i]) === "封面"
-                    });
-                    options.contentArray[i] = this.base64toImage(options.contentArray[i], imagesFolder);
-                    //对img标签做闭合处理,  比如， 图片是<img src=""> 改成这样<img src=""/>
-                    options.contentArray[i] = options.contentArray[i].replace(/<img [^>]+[^\/](>){1}/gi, function($0,$1,$2){
-                        var obj = $0.split("");
-                        obj.pop()
-                        obj.push("\/\>");
-                        return obj.join("")
-                    });
-                    //生成html数据;
-                    textFolder.file("chapter" + i + ".html", Handlebars.compile(this.page)({ body : options.contentArray[i] }));
-                };
-            }catch(e) {
-                console.log(e);
-            };
+                try{
+                    for(var i=0; i< chapterLength; i++) {
+                        //生成章节数据
+                        tocItem.push({
+                            name : options.tocArray[i],
+                            href : "chapter" + i + ".html",
+                            //如果页面的标题叫做封面，那么EB就认为， 这个是封面， 不把页面生成到toc.ncx中，但是生成到content.opf当中;
+                            isCoverPage : $.trim(options.tocArray[i]) === "封面"
+                        });
+                        var result = this.base64toImage(options.contentArray[i], imagesFolder);
+                        options.contentArray[i] = result[0];
+                        imageManifestItems = imageManifestItems.concat(result[1]);
+                        // 对所有自闭合标签做规范化：<br> → <br/>、<br/><br/> → <br/>、<br class="x"/> → <br class="x"/>
+                        // 避免苹果 Books 的 XML 解析器将 <br> 当作未闭合标签，导致 "Opening and ending tag mismatch: br line 11 and div"
+                        options.contentArray[i] = options.contentArray[i].replace(/<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)([^>]*?)>/gi, function(match, tag, attrs) {
+                            return '<' + tag + attrs + '/>';
+                        });
+                        //生成html数据;
+                        textFolder.file("chapter" + i + ".html", Handlebars.compile(this.page)({ body : options.contentArray[i], options: options }));
+                    }
+                } catch(e) {
+                    console.error("章节内容处理失败:", e);
+                }
 
             var MeTaFolder = zip.folder("META-INF");
             MeTaFolder.file("container.xml", this.container);
@@ -325,17 +373,47 @@ define(["Construct/DublinCore"], function( DublinCore ) {
             try{
                 //创建书籍的封面;
                 if(options.coverImage.length) {
-                    //生成缩略图图片, 并把生成的图片的地址获取到;
-                    var imgSrc = this.base64toImage($("<img>").attr("src",options.coverImage), imagesFolder) ;
-                    options.coverImage = imgSrc.match(/src=\"\.\.([^"]*)"/)[1];;
+                    // base64toImage 将 base64 图片写入 imagesFolder，返回 [html, filenames]
+                    // 封面页需要引用同一张图片，路径相对于 Text/coverpage.html，即 ../Images/uuid.ext
+                    var coverResult = this.base64toImage($("<img>").attr("src",options.coverImage), imagesFolder);
+                    var imgTag = coverResult[0];
+                    var coverFilename = coverResult[1][0] || "";
+                    imageManifestItems = imageManifestItems.concat(coverResult[1]);
+                    var match = imgTag.match(/src=["']([^"']+)["']/);
+                    // base64toImage 已返回正确的 ../images/uuid 格式
+                    // 直接使用，不做路径变换
+                    options.coverImage = match ? match[1] : "";
+                    options._coverImageName = coverFilename;
                 };
             }catch(e) {
                 options.coverImage = "";
             }
 
             //生成toc和opt文件
-            OPSFolder.file("content.opf", Handlebars.compile(this.contentOpt)({ tocItem : tocItem, options : options}) );
-            OPSFolder.file("toc.ncx", Handlebars.compile(this.toc)(tocItem));
+            if (options.coverImage.length) {
+                textFolder.file("coverpage.html", Handlebars.compile(this.coverpage)({ options: options }));
+            }
+            // 生成 content.opf 之前，注入图片 manifest 条目
+            var imageManifestHtml = "";
+            // deduplicate + 生成 manifest item 标签
+            var seenImages = {};
+            imageManifestItems.forEach(function(fname) {
+                if (fname && !seenImages[fname]) {
+                    seenImages[fname] = true;
+                    var ext = fname.split(".").pop().toLowerCase();
+                    var mediaType = "image/jpeg";
+                    if (ext === "png") mediaType = "image/png";
+                    else if (ext === "gif") mediaType = "image/gif";
+                    else if (ext === "svg") mediaType = "image/svg+xml";
+                    imageManifestHtml += '\n            <item id="img_' + fname + '" href="images/' + fname + '" media-type="' + mediaType + '"/>';
+                }
+            });
+
+            // 在 content.opf 的 </manifest> 之前注入图片条目
+            var compiledContentOpf = Handlebars.compile(this.contentOpt)({ tocItem : tocItem, options : options });
+            compiledContentOpf = compiledContentOpf.replace(/(<\/manifest>)/, imageManifestHtml + "\n        $1");
+            OPSFolder.file("content.opf", compiledContentOpf);
+            OPSFolder.file("toc.ncx", Handlebars.compile(this.toc)({ title: options.title, author: options.author, tocItem: tocItem }));
 
             /*
             options.coverImage = this.base64toImage($("<img>").attr("src",options.coverImage), imagesFolder);
