@@ -14,7 +14,7 @@
         </text>
     </docAuthor>
     <navMap>
-        {{#each this}}
+        {{#each tocItem}}
             <navPoint class="{{href}}" id="{{href}}" playOrder="{{@index}}">
                 <!--
                     如果是coverpage， 封面页的话， 不生成toc结构;
