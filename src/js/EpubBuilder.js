@@ -381,8 +381,10 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                     imageManifestItems = imageManifestItems.concat(coverResult[1]);
                     var match = imgTag.match(/src=["']([^"']+)["']/);
                     // base64toImage 返回 ../images/uuid（相对于 Text/coverpage.html）
-                    // 封面 manifest href 需要 images/uuid（相对于 OPS/），故去掉前缀 ../
-                    var coverHref = match ? match[1].replace(/^\.\.\//, "") : "";
+                    // coverpage.html img src 路径 → 相对于 Text/，需要 ../images/uuid
+                    // manifest href 路径 → 相对于 OPS/，需要 images/uuid（去掉 ../）
+                    options._coverImageSrc = match ? match[1] : "";  // 原始 ../images/uuid
+                    var coverHref = match ? match[1].replace(/^\.\.\//, "") : "";  // images/uuid
                     options.coverImage = coverHref;
                     options._coverImageName = coverFilename;
                     var ext = coverFilename.split(".").pop().toLowerCase();
