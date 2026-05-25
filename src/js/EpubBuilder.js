@@ -85,10 +85,18 @@ define(["Construct/DublinCore"], function( DublinCore ) {
 
             var _this = this;
             var containerXml = unzip.file("META-INF/container.xml").asText();
+            // 清理当当网等非标准 encrypt/files 属性，防止 XML 解析失败
+            containerXml = containerXml.replace(/<files[^>]*>[\s\S]*?<\/files>/gi, '');
+            containerXml = containerXml.replace(/\s*encrypt\s*=\s*["'][^"']*["']/gi, '');
             var domParser = new DOMParser;
             var xmlDoc = domParser.parseFromString(containerXml, 'text/xml');
             //fullPath.split("/")[0] == "content.opf" ? "" :
-            var fullPath  =  xmlDoc.getElementsByTagName("rootfile")[0].getAttribute("full-path") ;
+            var rootfiles = xmlDoc.getElementsByTagName("rootfile");
+            if (!rootfiles || rootfiles.length === 0) {
+                setData({ title: "EPUB 解析失败", content: [], cover: "" });
+                return;
+            }
+            var fullPath  =  rootfiles[0].getAttribute("full-path");
             var OEBPSFolderName =  fullPath.split("/")[0] === "content.opf" ? "" :  fullPath.split("/")[0];
             //读取contentOpt 文件;
             var contentOpt = unzip.file(fullPath).asText();
@@ -102,7 +110,7 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                 tocNcx = unzip.file( _this.toRelativeUrl(OEBPSFolderName +"/toc.ncx") ).asText();
             };
 
-            var $tocNcx = $(tocNcx);
+            var $tocNcx = $( domParser.parseFromString(tocNcx, "text/xml") );
 
             var contentOptXmlDoc = domParser.parseFromString(contentOpt, 'text/xml');
             var elSpine = contentOptXmlDoc.getElementsByTagName("spine")[0];
