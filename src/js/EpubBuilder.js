@@ -110,9 +110,11 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                 tocNcx = unzip.file( _this.toRelativeUrl(OEBPSFolderName +"/toc.ncx") ).asText();
             };
 
-            var $tocNcx = $( domParser.parseFromString(tocNcx, "text/xml") );
+            var $tocNcx = $( domParser.parseFromString(tocNcx.replace(/^\uFEFF/, '').trim(), "text/xml") );
 
-            var contentOptXmlDoc = domParser.parseFromString(contentOpt, 'text/xml');
+            // Strip BOM (\uFEFF) and leading whitespace/newlines before XML declaration
+            var contentOptClean = contentOpt.replace(/^\uFEFF/, '').trim();
+            var contentOptXmlDoc = domParser.parseFromString(contentOptClean, 'text/xml');
             var elSpine = contentOptXmlDoc.getElementsByTagName("spine")[0];
             var getTocEl = function( href ) {
                 var els = $tocNcx.find("content");
@@ -147,7 +149,13 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                 navText = $(nav).prev("navlabel").text();
                 if(!nav&&contentOpfSpinIndex===0)navText="封面";
 
-                content = unzip.file( _this.toRelativeUrl(OEBPSFolderName+"/"+href)).asText();
+                var chapterFile = unzip.file( _this.toRelativeUrl(OEBPSFolderName+"/"+href));
+                try {
+                    content = chapterFile ? chapterFile.asText() : "";
+                } catch(e) {
+                    content = "";
+                    console.log("章节文件读取失败: " + href);
+                }
                 //获取content的image, 并转化为base64的格式;
                 var domParser = new DOMParser();
                 var $content = $( domParser.parseFromString(content, 'text/html') );
@@ -168,6 +176,10 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                         var url = OEBPSFolderName+"/"+dir.join("/")+"/"+ (href || src);
                         var jpg = unzip.file( _this.toRelativeUrl(url) );
                         var imageType = _this.getImageType( url );
+                        if (!jpg) {
+                            _def.resolve();
+                            return;
+                        }
                         try{
                             var oFReader = new FileReader();
                             oFReader.onload = function (oFREvent) {
@@ -205,6 +217,12 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                     var url =  $(contentOptXmlDoc).find("item[id*="+coverMeta.split(".")[0]+"]").attr("href") || "";
                     var imageType = _this.getImageType( url );
                     var jpg = unzip.file( _this.toRelativeUrl(_this.toRelativeUrl(OEBPSFolderName+"/"+url)) );
+                    if (!jpg) {
+                        _this.dublinCore.setCover("");
+                        console.log("封面图片未找到: " + url);
+                        _def.resolve();
+                        return;
+                    }
                     var oFReader = new FileReader();
                     oFReader.onload = function (oFREvent) {
                         //设置属性;
@@ -343,10 +361,18 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                 });
             }
 
-            // 转义 Handlebars 分隔符，防止 {{xxx}} 被模板引擎误解析
+            // 转义 XML 特殊字符（& < >）和 Handlebars 分隔符 {{ }}
+            // Handlebars {{}} 在 XML 文本内容里是非法的，必须转义
+            // XML 特殊字符必须先转，否则 & 转完后 < > 又被错误替换
             var esc = function(s) {
                 if (!s) return "";
-                return s.replace(/\{\{/g, '\u200B{{').replace(/\}\}/g, '}}\u200B');
+                s = s.replace(/&/g, '&amp;');
+                s = s.replace(/</g, '&lt;');
+                s = s.replace(/>/g, '&gt;');
+                // Handlebars 分隔符：插入零宽字符破坏 {{}} 完整性
+                // 零宽字符在 XML 解析后仍然存在，但浏览器显示时不可见
+                s = s.replace(/\{\{/g, '\u200B{{').replace(/\}\}/g, '}}\u200B');
+                return s;
             };
             options.title = esc(options.title);
             options.author = esc(options.author);
