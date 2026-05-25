@@ -1,12 +1,12 @@
 <?xml version='1.0' encoding='utf-8'?>
 <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uuid_id">
     <metadata xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:opf="http://www.idpf.org/2007/opf" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:calibre="http://calibre.kovidgoyal.net/2009/metadata" xmlns:dc="http://purl.org/dc/elements/1.1/">
-        <dc:title>{{options.title}}</dc:title>
+        <dc:title>{{{options.title}}}</dc:title>
         <dc:language>zh</dc:language>
         <dc:publisher xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.publisher}}</dc:publisher>
         <dc:description xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.description}}</dc:description>
         <dc:language xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.language}}</dc:language>
-        <dc:creator opf:role="aut" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">{{options.author}}</dc:creator>
+        <dc:creator opf:role="aut" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">{{{options.author}}}</dc:creator>
         <dc:date xmlns:dc="http://purl.org/dc/elements/1.1/">{{options.date}}</dc:date>
         <dc:contributor opf:role="bkp" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">{{options.contributor}}</dc:contributor>
         <dc:identifier opf:scheme="UUID" id="uuid_id" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">urn:uuid:{{options.ISBN}}</dc:identifier>

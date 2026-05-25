@@ -201,7 +201,8 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                 var _def = $.Deferred();
                 try{
                     //找到cover背景图片的item, 因为不规范, 所以要处理多种情况;
-                    var url =  $(contentOptXmlDoc).find("item[id*="+$(contentOptXmlDoc).find("meta[name*=cover]").attr("content").split(".")[0]+"]").attr("href");
+                    var coverMeta = $(contentOptXmlDoc).find("meta[name*=cover]").attr("content") || "";
+                    var url =  $(contentOptXmlDoc).find("item[id*="+coverMeta.split(".")[0]+"]").attr("href") || "";
                     var imageType = _this.getImageType( url );
                     var jpg = unzip.file( _this.toRelativeUrl(_this.toRelativeUrl(OEBPSFolderName+"/"+url)) );
                     var oFReader = new FileReader();
@@ -375,6 +376,10 @@ define(["Construct/DublinCore"], function( DublinCore ) {
                         imageManifestItems = imageManifestItems.concat(result[1]);
                         // 剥离 <body> 和 </body> 标签，避免 page.html 模板产生双重 <body>
                         var rawContent = options.contentArray[i];
+                        // 剥离 <html>...</html> 外层（粘贴内容时带入的完整 HTML 文档结构），
+                        // 避免插入 page.html 模板后产生双重 <html> 标签，导致 Acrobat/Foxit XML 解析失败
+                        rawContent = rawContent.replace(/<\/?html[^>]*>/gi, '');
+                        rawContent = rawContent.replace(/<\/?head[^>]*>/gi, '');
                         rawContent = rawContent.replace(/<\/?body[^>]*>/gi, '');
                         // 对所有自闭合标签做规范化：<br> → <br/>、<br/><br/> → <br/>、<br class="x"/> → <br class="x"/>
                         // 避免苹果 Books 的 XML 解析器将 <br> 当作未闭合标签，导致 "Opening and ending tag mismatch: br line 11 and div"
